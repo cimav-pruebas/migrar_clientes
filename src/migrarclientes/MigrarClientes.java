@@ -24,7 +24,11 @@ public class MigrarClientes {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-        migrarClientes();
+        if (false) {
+            migrarClientes();
+        } else {
+            migrarContactos();
+        }
     }
     
     private static void migrarClientes() {
@@ -81,6 +85,8 @@ public class MigrarClientes {
                     fax = lada + " " + fax;
                     
                     idTipoCliente = idTipoCliente == 0 ? 6 : idTipoCliente; // tipoCliente es el SECTOR :: 1EMPRESA, 2SECTOR EDUCATIVO, 3CENTRO..., 4PUBLi..., 5MAQUILA    0y6 son Ninugno
+
+                    // tipoEmpresa ==> Tamano_empresa ==> Micro, Pequena, Mediana, Grande, Publico 
                     
                     String sqlMigration = "clave, nombre, rfc, razon_social, num_empleados, calle_num, colonia, cp, telefono, fax, created_at, tamano_empresa, sector, pais_id, estado_id, ciudad";
                     String sqlValues = "'" + clave.trim() + "', '" + nombre + "', '" + rfc.trim() + "', '" + nombre  + "', " + numEmp + ", '" + calle + "', '" + colonia + "', '" + postal.trim() + "', '" 
@@ -93,6 +99,8 @@ public class MigrarClientes {
                     /****************/
                     stmtPost.execute(sqlMigration);
                     /****************/
+                    
+                    
                     
 // select table_name, column_name from dba_tab_columns where column_name like '%CIUDAD%';
                     
@@ -111,5 +119,60 @@ public class MigrarClientes {
             Logger.getLogger(MigrarClientes.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
+
+    private static void migrarContactos() {
+        try {
+            Driver oracleDriver = new oracle.jdbc.driver.OracleDriver();
+            Driver oraclePostgres = new org.postgresql.Driver();
+            
+            DriverManager.registerDriver(oracleDriver);
+            DriverManager.registerDriver(oraclePostgres);
+
+            Connection connOracle = DriverManager.getConnection("jdbc:oracle:thin:@//10.1.0.44:1521/cimavXDB.netmultix.cimav.edu.mx", "almacen", "afrika");
+            Connection connPostgres = DriverManager.getConnection("jdbc:postgresql://localhost:5432/sigre_development");
+
+            try (Statement stmtOra = connOracle.createStatement(); Statement stmtPostCliente = connPostgres.createStatement(); Statement stmtPostContacto = connPostgres.createStatement()) {
+                
+                /****************/
+                stmtPostCliente.execute("DELETE from vinculacion_contactos");
+                stmtPostCliente.execute("ALTER SEQUENCE vinculacion_contactos_id_seq RESTART WITH 1");
+                /****************/
+                
+                String sqlContactos = "SELECT * FROM CL06";
+                
+                ResultSet rsOraContactos = stmtOra.executeQuery(sqlContactos);
+                while(rsOraContactos.next()){
+                    String clave_cliente = rsOraContactos.getString("CL06_CLAVE").trim();
+                    String nombre = rsOraContactos.getString("CL06_contacto").trim();
+                    String email = rsOraContactos.getString("CL06_email").trim();
+                    
+                    System.out.println("---------------------------------------------------------------------------------");
+                    System.out.println( clave_cliente +" -- "+ nombre +" -- "+ email);
+                    
+                    String sqlCliente = "SELECT id FROM vinculacion_clientes WHERE clave = '" + clave_cliente + "'";
+                    System.out.println(sqlCliente);
+                    ResultSet rsCliente = stmtPostCliente.executeQuery(sqlCliente);
+                    while(rsCliente.next()) {
+                        int idCliente = rsCliente.getInt("id");
+                        System.out.println(idCliente);
+                        String sqlMigration = "INSERT INTO vinculacion_contactos (nombre, email, cliente_id) VALUES ('" + nombre + "', '" + email + "', " + idCliente + ")";
+                        System.out.println(sqlMigration);
+//                        /****************/
+                        stmtPostContacto.execute(sqlMigration);
+//                        /****************/
+                    }
+                }
+                
+            } catch (Exception e2) {
+                System.out.println(">>> " + e2.getMessage());
+            } finally {
+                connOracle.close();
+            }
+
+        } catch (SQLException ex) {
+            Logger.getLogger(MigrarClientes.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
     
 }
